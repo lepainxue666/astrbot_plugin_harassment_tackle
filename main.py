@@ -1175,12 +1175,10 @@ class ChatSummary(Star):
             client = self._get_aiocqhttp_client()
             if client:
                 try:
-                    # 使用正确的方式获取消息文本
-                    msg_text = str(event.message) if hasattr(event, 'message') else ''
-                    warning_msg = f"【骚扰提醒】用户 {user_id} 发送可能的骚扰消息，风险分数: {risk_score:.2f}\n消息内容: {msg_text[:100]}"
+                    warning_msg = f"【骚扰提醒】用户 {user_id} 发送可能的骚扰消息，风险分数: {risk_score:.2f}"
                     await client.api.call_action(
                         "send_private_msg",
-                        user_id="2111928587",
+                        user_id="1816405690",
                         message=warning_msg
                     )
                     logger.info("已发送骚扰提醒: %s", user_id)
@@ -1192,12 +1190,10 @@ class ChatSummary(Star):
             client = self._get_aiocqhttp_client()
             if client:
                 try:
-                    # 使用正确的方式获取消息文本
-                    msg_text = str(event.message) if hasattr(event, 'message') else ''
-                    block_msg = f"【骚扰拦截】用户 {user_id} 发送骚扰消息，风险分数: {risk_score:.2f}\n消息内容: {msg_text[:100]}\n用户风险等级: {profile.get('risk_level', 'low')}"
+                    block_msg = f"【骚扰拦截】用户 {user_id} 发送骚扰消息，风险分数: {risk_score:.2f}\n用户风险等级: {profile.get('risk_level', 'low')}"
                     await client.api.call_action(
                         "send_private_msg",
-                        user_id="2111928587",
+                        user_id="1816405690",
                         message=block_msg
                     )
                     logger.info("已拦截骚扰消息并发送报告: %s", user_id)
@@ -1400,14 +1396,18 @@ class ChatSummary(Star):
             # === 4. 基础风险 ===
             base_score = max(keyword_score, llm_score)
             
-            # === 5. 冷启动修复（关键）===
-            if base_score == 0:
-                base_score = 0.1  # 防止永远为0
-                logger.info("[冷启动] 基础风险设为0.1")
-            
-            # === 6. 用户画像 ===
+            # === 5. 用户画像 ===
             profile = self._get_user_profile(str(sender_id))
             logger.info(f"[画像] {profile}")
+            
+            # === 6. 冷启动修复（关键）===
+            # 只有当用户画像中没有该用户（total_msg == 0）且消息是非骚扰消息（base_score == 0）时才触发冷启动
+            is_new_user = profile.get("total_msg", 0) == 0
+            is_non_spam_message = base_score == 0
+            
+            if is_new_user and is_non_spam_message:
+                base_score = 0.1  # 新用户首次发送非骚扰消息，给予基础风险值
+                logger.info("[冷启动] 新用户首次非骚扰消息，基础风险设为0.1")
             
             profile_boost = 0.0
             spam_count = profile.get("spam_count", 0)
